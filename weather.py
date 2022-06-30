@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # for handling weather request using openweathermap API key
 import requests
-
+from API_KEY import api_key, base_url
 
 # default location
 city_name = "Addis Ababa"

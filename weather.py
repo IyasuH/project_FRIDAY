@@ -2,8 +2,6 @@
 # for handling weather request using openweathermap API key
 import requests
 
-api_key = "04681f65144b3fe5bad5940ff0493df7"  
-base_url = "http://api.openweathermap.org/data/2.5/weather?"
 
 # default location
 city_name = "Addis Ababa"

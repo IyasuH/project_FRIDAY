@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+from __future__ import print_function
+from ast import Sub
 import  speech_recognition as sr
 import pyttsx3
 import pywhatkit
@@ -6,12 +8,40 @@ import wikipedia
 import pyjokes
 import weather
 import news
+import googleAPI
 import keyboard
 import datetime
 import csv
+import serial
+import serial.tools.list_ports
 
+import os.path
 
 listener = sr.Recognizer()
+
+# for the serial communication with arduino my basic ports are 12 and 20
+port ='COM20'
+baud = 9600
+arduino_ports = [
+    p.device
+    for p in serial.tools.list_ports.comports()
+    if 'COM12' in p.description
+]
+
+# configuring google API for the sake of Calendar, Gmail, ...
+    
+if not arduino_ports:
+    try:
+        uno = serial.Serial(port, baud, timeout=1)
+    except:
+        print("[ERROR]: COULD NOT CONNECT WITH ARDUINO")
+else:
+    uno = serial.Serial(arduino_ports[0], baud, timeout=1)
+
+def arduino(command):
+    byte_msg = command.encode('utf-8')
+    uno.write(byte_msg)
+    
 
 # voice engine starting
 engine = pyttsx3.init()
@@ -22,6 +52,9 @@ def talk(text):
     # function for text to speech
     engine.say(text)
     engine.runAndWait()
+
+welcome = "[INFO]: what can I help"
+talk(welcome)
 
 def take_command():
     # using the voice from the microphone
@@ -43,10 +76,20 @@ def take_command():
         pass
     return command
 
+def take_command_key():
+    #This is to take commands from keyboard to make the testing easy
+    command = input("[INPUT]: ")
+    command = command.lower()
+    return command
 
-def run_friday():
+def run_friday(by):
     # This is series of if and else commands for different commands
-    command = take_command()
+    # handle the input keyboard or voice
+    if by == 'key':
+        command = take_command_key()
+    elif by == 'voice':
+        command = take_command()
+
     if 'play' in command:
         song = command.replace('play', '')
         print("playing" + song)
@@ -97,6 +140,55 @@ def run_friday():
         print("[INFO]" + a)
         talk(a)
         response = a
+    
+    elif 'light' in command:
+        # to tourn light off and on using arduino serial communication
+        command = command.replace('light', '')
+        if 'on' in command:
+            # turn the light on
+            response = "LIGHT IS ON"
+            print("[INFO]: " + response)
+            arduino('light_on')
+            talk(response)
+        elif 'off' in command:
+            # turn the light off
+            response = "LIGHT IS OFF"
+            print("[INFO]: " + response)
+            arduino('light_off')
+            talk(response)
+
+    elif 'room' in command:
+        command = command.replace('room','')
+        if 'info' in command:
+            print("[INFO]: room Info")
+            arduino('room_info')            
+            response = uno.read(100).decode('utf-8').rstrip()
+            print("[INFO]: "+ response)
+            talk(response)
+    
+    elif 'my events' in command:
+        events = googleAPI.ten_events()
+        if not events:
+            response = "No upcoming events"
+            print("[INFO]: "+ response)
+            talk(response)
+        else:
+            for event in events:
+                start = event['start'].get('dateTime', event['start'].get('date'))
+                response = (start, event['summary'])
+                print("[INFO]: " + response)
+                talk(response)
+
+    elif 'read mail' in command:
+        mails = googleAPI.gmail_main()
+        if not mails:
+            response = "No mails"
+            print("[INFO]: "+response)
+            talk(response)
+        else:
+            response = mails
+            print(response)
+            talk(response)
 
     elif 'error' in command:
         # if error happens speech_recognition
@@ -104,14 +196,14 @@ def run_friday():
         print("[+]" + info)
         talk(info)
         response = info
-    
+        
     else:
         # if any of the above commads dones not work
         info = "please say the command again."
         print(info)
         talk(info)
         response = info
-    
+
     # inorder to save every request and responses to csv file
     # for the of sake of MACHINE LEARNING
     data = [command, response, datetime.datetime.now()]
@@ -123,9 +215,14 @@ def run_friday():
 while True:
     # It is only going to recive commands only if [insert] key are touched
     if keyboard.read_key() == "insert":
-        print("[INFO] Key board pressed")
-        run_friday()
+        print("[INPUT]: KEYBOARD")
+        run_friday("key")
+    elif keyboard.read_key() == "home":
+        print("[INPUT]: VOICE")
+        run_friday("voice")
     # And break the loop if [esc] button is touched
     elif keyboard.read_key() =="esc":
         print("[INFO] Existing")
+        if uno:
+            uno.close()
         break
